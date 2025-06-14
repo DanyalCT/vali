@@ -24,7 +24,7 @@ def get_pdf_text(pdfid: str) -> str:
     except Exception as e:
         raise Exception(f"Error extracting PDF text: {str(e)}")
 
-def perform_startup_valuation(pdfid: str, api_key: str = "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", model_name: str = "llama3-8b-8192"):
+def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyC5QqQ15b3DkgLHefpJufzs1dEHrf74HJ4", model_name: str = "gemini-2.0-flash"):
     """
     Perform startup valuation based on PDF text extracted from MongoDB.
     
@@ -40,7 +40,6 @@ def perform_startup_valuation(pdfid: str, api_key: str = "gsk_XwMATfQqpGHdgnzPbm
     try:
         print("pdfID",pdfid)
         pdfText,user_Question = get_pdf_text(pdfid)
-        print("pdfText",pdfText)
         print("user_Question",user_Question)
         if not pdfText or not user_Question:
             return {"error": "No text content found in the PDF"}
@@ -52,8 +51,8 @@ def perform_startup_valuation(pdfid: str, api_key: str = "gsk_XwMATfQqpGHdgnzPbm
         os.environ["GROQ_API_KEY"] = api_key
     
     client = openai.OpenAI(
-        api_key=os.environ.get("GROQ_API_KEY"),
-        base_url="https://api.groq.com/openai/v1"
+        api_key="AIzaSyC5QqQ15b3DkgLHefpJufzs1dEHrf74HJ4",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai"
     )
 
     # --- Basic Helper Python Functions ---
@@ -603,6 +602,6 @@ def perform_startup_valuation(pdfid: str, api_key: str = "gsk_XwMATfQqpGHdgnzPbm
     print(f"Final response: {final_response}")
     return {
         "final_response": final_response,
-        "conversation_results": conversation_results,
-        "conversation_history": conversation_history
+        # "conversation_results": conversation_results,
+        # "conversation_history": conversation_history
     } 

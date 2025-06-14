@@ -33,11 +33,11 @@ async def generate_questions(user_id: str = Form(...), pdf: UploadFile = File(..
     user_qa = UserQA(user_id=user_id, qas=qa_items)
     save_user_qa(user_qa,pdf_id)
 
-    return {"user_id": user_id, "question_index": 0, "question": questions[0] if questions else None}
+    return {"user_id": user_id, "pdf_id": pdf_id, "question_index": 0, "question": questions[0] if questions else None}
 
 @app.post("/api/v1/questions/answer")
 async def answer_question(req: AnswerRequest):
-    next_index, next_question = update_answer_and_get_next(req.user_id, req.question_index, req.answer)
+    next_index, next_question = update_answer_and_get_next(req.user_id,req.pdf_id, req.question_index, req.answer)
     if next_question is not None:
         return {"user_id": req.user_id, "question_index": next_index, "question": next_question}
     else:

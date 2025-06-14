@@ -34,15 +34,15 @@ def get_user_PDF(user_id: str):
     return data
 
 # New: Update answer for a question index and return next question (if any)
-def update_answer_and_get_next(user_id: str, question_index: int, answer: str):
-    user_qa = db.user_qas.find_one({"user_id": user_id})
+def update_answer_and_get_next(user_id: str,pdf_id: str, question_index: int, answer: str):
+    user_qa = db.user_qas.find_one({"user_id": user_id,"pdf_id":pdf_id})
     if not user_qa or "qas" not in user_qa or question_index >= len(user_qa["qas"]):
         return None, None
     # Update answer
     qas = user_qa["qas"]
     qas[question_index]["answer"] = answer
     db.user_qas.update_one(
-        {"user_id": user_id},
+        {"user_id": user_id,"pdf_id":pdf_id},
         {"$set": {f"qas.{question_index}.answer": answer}}
     )
     # Find next unanswered question
