@@ -9,7 +9,6 @@ class QAItem(BaseModel):
 class UserQA(BaseModel):
     user_id: str = Field(..., description="MongoDB user id")
     qas: List[QAItem]
-    pdf_text: Optional[str] = Field(None, description="Extracted text from the PDF document")
 
 class AnswerRequest(BaseModel):
     user_id: str
