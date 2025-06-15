@@ -24,7 +24,7 @@ def get_pdf_text(pdfid: str) -> str:
     except Exception as e:
         raise Exception(f"Error extracting PDF text: {str(e)}")
 
-def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyC5QqQ15b3DkgLHefpJufzs1dEHrf74HJ4", model_name: str = "gemini-2.0-flash"):
+def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyDE1Ac0n_YGik7XUj-koaT22SS84DQsFF8", model_name: str = "gemini-2.0-flash"):
     """
     Perform startup valuation based on PDF text extracted from MongoDB.
     
@@ -51,7 +51,7 @@ def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyC5QqQ15b3DkgLHef
         os.environ["GROQ_API_KEY"] = api_key
     
     client = openai.OpenAI(
-        api_key="AIzaSyC5QqQ15b3DkgLHefpJufzs1dEHrf74HJ4",
+        api_key="AIzaSyDE1Ac0n_YGik7XUj-koaT22SS84DQsFF8",
         base_url="https://generativelanguage.googleapis.com/v1beta/openai"
     )
 
