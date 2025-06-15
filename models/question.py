@@ -14,4 +14,5 @@ class AnswerRequest(BaseModel):
     user_id: str
     pdf_id: str
     question_index: int
-    answer: str 
+    answer: str
+    pdf_id: str
