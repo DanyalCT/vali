@@ -8,6 +8,7 @@ import io
 from core.startup_valuation import perform_startup_valuation
 from core.generate_report_llm import generate_report
 from core.fetch_data_by_id import fetch_data_by_id
+from core.FCFFprojection import perform_fcff_projection
 from bson import ObjectId
 from db.crud import save_pdf_text
 
@@ -51,6 +52,25 @@ def generate_llm_report(doc_id: str):
     
     report = generate_report(eval_text, pdf_text)
     return {"report": report}
+
+@app.get("/api/v1/fcff-projection/{pdf_id}")
+async def get_fcff_projection(pdf_id: str):
+    """
+    Get FCFF projection for a given PDF ID.
+    
+    Args:
+        pdf_id (str): The ID of the PDF document
+        
+    Returns:
+        dict: FCFF projection results including the formatted table
+    """
+    try:
+        result = perform_fcff_projection(pdf_id)
+        if "error" in result:
+            return {"error": result["error"]}
+        return result
+    except Exception as e:
+        return {"error": f"Error processing FCFF projection: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn

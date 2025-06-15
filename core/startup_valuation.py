@@ -4,6 +4,10 @@ import json
 import math
 from db.mongodb import db
 from bson import ObjectId
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def get_pdf_text(pdfid: str) -> str:
     """
@@ -51,7 +55,7 @@ def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyDE1Ac0n_YGik7XUj
         os.environ["GROQ_API_KEY"] = api_key
     
     client = openai.OpenAI(
-        api_key="AIzaSyDE1Ac0n_YGik7XUj-koaT22SS84DQsFF8",
+        api_key=os.getenv("GEMINI_API_KEY"),  # Get the API key from environment variables
         base_url="https://generativelanguage.googleapis.com/v1beta/openai"
     )
 

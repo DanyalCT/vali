@@ -12,6 +12,7 @@ class UserQA(BaseModel):
 
 class AnswerRequest(BaseModel):
     user_id: str
+    pdf_id: str
     question_index: int
     answer: str
     pdf_id: str
