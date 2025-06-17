@@ -1,5 +1,5 @@
 #main.py
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Body
 from core.pdf_utils import extract_text_from_pdf
 from core.llm import generate_questions_from_text
 from db.crud import save_user_qa, update_answer_and_get_next
@@ -11,13 +11,20 @@ from core.fetch_data_by_id import fetch_data_by_id
 from core.FCFFprojection import perform_fcff_projection
 from bson import ObjectId
 from db.crud import save_pdf_text
+from pydantic import BaseModel
+
+class FCFFRequest(BaseModel):
+    pdf_id: str
+    userMSG: str
+
+class ValuationRequest(BaseModel):
+    pdf_id: str
 
 app = FastAPI()
 
-
 @app.post("/api/v1/valuation")
-async def valuation(pdf_id: str = Form(...)):
-    result = perform_startup_valuation(pdf_id)
+async def valuation(request: ValuationRequest):
+    result = perform_startup_valuation(request.pdf_id)
     return {"result": result}
 
 @app.post("/api/v1/questions/generate")
@@ -40,9 +47,9 @@ async def generate_questions(user_id: str = Form(...), pdf: UploadFile = File(..
 async def answer_question(req: AnswerRequest):
     next_index, next_question = update_answer_and_get_next(req.user_id,req.pdf_id, req.question_index, req.answer)
     if next_question is not None:
-        return {"user_id": req.user_id, "question_index": next_index, "question": next_question}
+        return {"user_id": req.user_id, "question_index": next_index, "question": next_question,"pdf_id": req.pdf_id,"all_questions_answered": False}
     else:
-        return {"user_id": req.user_id, "message": "All questions answered!"}
+        return {"user_id": req.user_id,"pdf_id": req.pdf_id,"all_questions_answered": True, "message": "All questions answered!"}
     
 @app.get("/generate-report/{doc_id}")
 def generate_llm_report(doc_id: str):
@@ -53,19 +60,19 @@ def generate_llm_report(doc_id: str):
     report = generate_report(eval_text, pdf_text)
     return {"report": report}
 
-@app.get("/api/v1/fcff-projection/{pdf_id}")
-async def get_fcff_projection(pdf_id: str):
+@app.post("/api/v1/fcff-projection/")
+async def get_fcff_projection(request: FCFFRequest):
     """
     Get FCFF projection for a given PDF ID.
     
     Args:
-        pdf_id (str): The ID of the PDF document
+        request (FCFFRequest): Request body containing pdf_id and userMSG
         
     Returns:
         dict: FCFF projection results including the formatted table
     """
     try:
-        result = perform_fcff_projection(pdf_id)
+        result = perform_fcff_projection(request.pdf_id, request.userMSG)
         if "error" in result:
             return {"error": result["error"]}
         return result

@@ -225,184 +225,250 @@ def calculate_cost_of_equity_capm(risk_free_rate, beta, market_risk_premium):
     return cost_of_equity
 
 # --- MAIN EXECUTION BLOCK ---
-def perform_fcff_projection(pdfid: str) -> dict:
+def perform_fcff_projection(pdfid: str,userMSG:str) -> dict:
     """
     Perform FCFF projection based on PDF text extracted from MongoDB.
     
     Args:
         pdfid (str): The ID of the PDF document containing financial information
+        userMSG (str): User message to determine if forecast should be saved
     
     Returns:
         dict: The FCFF projection results and calculations
     """
     # Extract PDF text from MongoDB
     try:
-        print("pdfID", pdfid)
-        pdf_doc, qa_doc = get_pdf_text(pdfid)
-        if not pdf_doc or not qa_doc:
-            return {"error": "No text content found in the PDF"}
-        
-        # Extract text and Q&A from documents
-        pdf_text = pdf_doc.get('text', '')
-        qa_data = qa_doc.get('qas', [])
-        
-        # Format Q&A into a readable string
-        qa_text = ""
-        for qa in qa_data:
-            question = qa.get('question', '')
-            answer = qa.get('answer', '')
-            if question and answer:
-                qa_text += f"Q: {question}\nA: {answer}\n\n"
-        
-        print("PDF Text:", pdf_text[:200] + "...")  # Print first 200 chars for debugging
-        print("QA Text:", qa_text[:200] + "...")    # Print first 200 chars for debugging
-        
-    except Exception as e:
-        return {"error": f"Failed to extract PDF text: {str(e)}"}
+        messages = []
+        get_messages= db.forecast_msgs.find_one({"pdf_id": pdfid})
+        if get_messages and get_messages.get('messages'):
+            messages = get_messages.get('messages')
+            print("Messages found", messages)
+        elif get_messages and get_messages.get('approved'):
+            return {"fcff_table": get_messages.get('forecast_results'),"approved":True}
+        else:
+            print("No messages found")
+        client = openai.OpenAI(
+                api_key=os.getenv("GEMINI_API_KEY"),
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai"
+            )    
+        if len(messages) > 0:
+            print("Messages found", messages)
+            if not userMSG:
+                return {"error": "No user message found"}
+            else:
+                print("User message", userMSG)
+                if userMSG.lower() == "approved":
+                    # Get the last assistant message which contains the forecast results
+                    last_assistant_message = None
+                    for msg in reversed(messages):
+                        if msg["role"] == "assistant":
+                            last_assistant_message = msg["content"]
+                            break
+                    
+                    if last_assistant_message:
+                        # Update the pdf_texts collection with the forecast results
+                        db.pdf_texts.update_one(
+                            {"_id": ObjectId(pdfid)},
+                            {"$set": {"forecast_results": last_assistant_message}}
+                        )
+                        db.forecast_msgs.update_one(
+                            {"pdf_id": pdfid},
+                            {"$set": {"approved":True}}
+                        )
+                        print("Forecast results saved to pdf_texts collection")
+                        return {"fcff_table": last_assistant_message,"approved":True}
+                
+                messages.append({"role": "user", "content": userMSG})
+                print("Messages found", messages)
 
-    # Set up API client
-    client = openai.OpenAI(
-        api_key=os.getenv("GEMINI_API_KEY"),
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai"
-    )
+                response = client.chat.completions.create(
+                    model="gemini-2.0-flash",
+                    messages=messages,
+                    temperature=0.1
+                )
+                print("Response", response)
+                response_content = response.choices[0].message.content.strip()
+                messages.append({"role": "assistant", "content": response_content})
+                db.forecast_msgs.update_one({"pdf_id": pdfid}, {"$set": {"messages": messages}})
+                
+                # If user message is "approved", save the forecast results to pdf_texts collection
+                return {"fcff_table": response.choices[0].message.content,"approved":False}
+            
+        else:
+            print("No messages found")
 
-    # Create the financial forecast prompt
-    forecast_prompt = f"""
-    You are a financial analyst. Analyze the following company information and generate a 5-year financial forecast.
+            try:
+                print("pdfID", pdfid)
 
-    COMPANY INFORMATION:
-    {pdf_text}
+                pdf_doc, qa_doc = get_pdf_text(pdfid)
+                if not pdf_doc or not qa_doc:
+                    return {"error": "No text content found in the PDF"}
+                
+                # Extract text and Q&A from documents
+                pdf_text = pdf_doc.get('text', '')
+                qa_data = qa_doc.get('qas', [])
+                
+                # Format Q&A into a readable string
+                qa_text = ""
+                for qa in qa_data:
+                    question = qa.get('question', '')
+                    answer = qa.get('answer', '')
+                    if question and answer:
+                        qa_text += f"Q: {question}\nA: {answer}\n\n"
+                
+                print("PDF Text:", pdf_text[:200] + "...")  # Print first 200 chars for debugging
+                print("QA Text:", qa_text[:200] + "...")    # Print first 200 chars for debugging
+                
+            except Exception as e:
+                return {"error": f"Failed to extract PDF text: {str(e)}"}
 
-    USER QUESTIONS AND ANSWERS:
-    {qa_text}
+            # Set up API client
+         
 
-    Based on the above information, generate a financial forecast in the following JSON format:
-    {{
-        "assumptions": {{
-            "revenue_growth_rate": <float between 0 and 1>,
-            "cog_growth_rate": <float between 0 and 1>,
-            "opex_growth_rate": <float between 0 and 1>,
-            "depreciation_rate": <float between 0 and 1>,
-            "capex_rate": <float between 0 and 1>,
-            "working_capital_rate": <float between 0 and 1>,
-            "tax_rate": <float between 0 and 1>,
-            "terminal_growth_rate": <float between 0 and 1>
-        }},
-        "methodology": "<brief explanation of your forecasting approach>",
-        "projections": {{
-            "revenues": [<5 float values>],
-            "cost_of_goods_sold": [<5 float values>],
-            "gross_profit": [<5 float values>],
-            "operating_expenses": [<5 float values>],
-            "ebitda": [<5 float values>],
-            "depreciation_amortization": [<5 float values>],
-            "ebit": [<5 float values>],
-            "nopat": [<5 float values>],
-            "capex": [<5 float values>],
-            "change_in_net_working_capital": [<5 float values>],
-            "fcff": [<5 float values>],
-            "net_ppe": [<5 float values>],
-            "gross_ppe": [<5 float values>]
-        }}
-    }}
+            # Create the financial forecast prompt
+            forecast_prompt = f"""
+            You are a financial analyst. Analyze the following company information and generate a 5-year financial forecast.
 
-    IMPORTANT:
-    1. Use ONLY the information provided in the company information and Q&A
-    2. Return ONLY the JSON object, no other text
-    3. All numbers should be positive
-    4. All arrays must have exactly 5 values
-    5. All rates must be between 0 and 1
-    6. Base your assumptions on the actual company data provided
-    """
+            COMPANY INFORMATION:
+            {pdf_text}
 
-    try:
-        # Get the financial forecast from the LLM
-        response = client.chat.completions.create(
-            model="gemini-2.0-flash",
-            messages=[{"role": "user", "content": forecast_prompt}],
-            temperature=0.1
-        )
+            USER QUESTIONS AND ANSWERS:
+            {qa_text}
 
-        # Get the response content and clean it
-        response_content = response.choices[0].message.content.strip()
-        print("Raw LLM Response:", response_content[:200] + "...")  # Print first 200 chars for debugging
-        
-        # Remove any markdown code block indicators if present
-        response_content = response_content.replace('```json', '').replace('```', '').strip()
-        
-        # Try to parse the JSON response
-        try:
-            forecast_data = json.loads(response_content)
-        except json.JSONDecodeError as e:
-            print(f"JSON Parse Error: {str(e)}")
-            print(f"Cleaned Response Content: {response_content}")
-            return {"error": f"Invalid JSON response from LLM: {str(e)}"}
+            Based on the above information, generate a financial forecast in the following JSON format:
+            {{
+                "assumptions": {{
+                    "revenue_growth_rate": <float between 0 and 1>,
+                    "cog_growth_rate": <float between 0 and 1>,
+                    "opex_growth_rate": <float between 0 and 1>,
+                    "depreciation_rate": <float between 0 and 1>,
+                    "capex_rate": <float between 0 and 1>,
+                    "working_capital_rate": <float between 0 and 1>,
+                    "tax_rate": <float between 0 and 1>,
+                    "terminal_growth_rate": <float between 0 and 1>
+                }},
+                "methodology": "<brief explanation of your forecasting approach>",
+                "projections": {{
+                    "revenues": [<5 float values>],
+                    "cost_of_goods_sold": [<5 float values>],
+                    "gross_profit": [<5 float values>],
+                    "operating_expenses": [<5 float values>],
+                    "ebitda": [<5 float values>],
+                    "depreciation_amortization": [<5 float values>],
+                    "ebit": [<5 float values>],
+                    "nopat": [<5 float values>],
+                    "capex": [<5 float values>],
+                    "change_in_net_working_capital": [<5 float values>],
+                    "fcff": [<5 float values>],
+                    "net_ppe": [<5 float values>],
+                    "gross_ppe": [<5 float values>]
+                }}
+            }}
 
-        # Validate the required fields in the response
-        required_fields = ["assumptions", "methodology", "projections"]
-        for field in required_fields:
-            if field not in forecast_data:
-                return {"error": f"Missing required field in LLM response: {field}"}
+            IMPORTANT:
+            1. Use ONLY the information provided in the company information and Q&A
+            2. Return ONLY the JSON object, no other text
+            3. All numbers should be positive
+            4. All arrays must have exactly 5 values
+            5. All rates must be between 0 and 1
+            6. Base your assumptions on the actual company data provided
+            """
 
-        # Validate the projections data
-        required_metrics = [
-            "revenues", "cost_of_goods_sold", "gross_profit", "operating_expenses",
-            "ebitda", "depreciation_amortization", "ebit", "nopat", "capex",
-            "change_in_net_working_capital", "fcff", "net_ppe", "gross_ppe"
-        ]
-        
-        for metric in required_metrics:
-            if metric not in forecast_data["projections"]:
-                return {"error": f"Missing required metric in projections: {metric}"}
-            if not isinstance(forecast_data["projections"][metric], list):
-                return {"error": f"Invalid data type for metric {metric}: expected list"}
-            if len(forecast_data["projections"][metric]) != 5:
-                return {"error": f"Invalid number of values for metric {metric}: expected 5"}
+            try:
+                messages.append({"role": "user", "content": forecast_prompt})
+                # Get the financial forecast from the LLM
+                response = client.chat.completions.create(
+                    model="gemini-2.0-flash",
+                    messages=messages,
+                    temperature=0.1
+                )
+              
 
-        # Format the FCFF table in the requested structure
-        table_header = "| **Metric**                    | **Year 1**   | **Year 2**   | **Year 3**   | **Year 4**   | **Year 5**    |"
-        table_separator = "|------------------------------|--------------|--------------|--------------|--------------|---------------|"
-        
-        # Create the formatted table
-        formatted_table = [table_header, table_separator]
-        
-        # Define the metrics and their display names
-        metrics = [
-            ("revenues", "Revenues"),
-            ("cost_of_goods_sold", "Cost of Goods Sold"),
-            ("gross_profit", "Gross Profit"),
-            ("operating_expenses", "Operating Expenses"),
-            ("ebitda", "EBITDA"),
-            ("depreciation_amortization", "Depreciation & Amortization"),
-            ("ebit", "EBIT"),
-            ("nopat", "NOPAT"),
-            ("capex", "CapEx"),
-            ("change_in_net_working_capital", "Change in Net Working Capital"),
-            ("fcff", "FCFF"),
-            ("net_ppe", "Net PP&E"),
-            ("gross_ppe", "Gross PP&E")
-        ]
-        
-        # Add each metric row
-        for metric_key, metric_name in metrics:
-            values = forecast_data["projections"][metric_key]
-            row = f"| {metric_name:<30} |"
-            for value in values:
-                row += f" {value:,.2f} |"
-            formatted_table.append(row)
+                # Get the response content and clean it
+                response_content = response.choices[0].message.content.strip()
+                print("Raw LLM Response:", response_content[:200] + "...")  # Print first 200 chars for debugging
+                
+                # Remove any markdown code block indicators if present
+                response_content = response_content.replace('```json', '').replace('```', '').strip()
+                
+                # Try to parse the JSON response
+                try:
+                    forecast_data = json.loads(response_content)
+                except json.JSONDecodeError as e:
+                    print(f"JSON Parse Error: {str(e)}")
+                    print(f"Cleaned Response Content: {response_content}")
+                    return {"error": f"Invalid JSON response from LLM: {str(e)}"}
 
-        # Join the table lines with newlines
-        formatted_output = "\n".join(formatted_table)
+                # Validate the required fields in the response
+                required_fields = ["assumptions", "methodology", "projections"]
+                for field in required_fields:
+                    if field not in forecast_data:
+                        return {"error": f"Missing required field in LLM response: {field}"}
 
-        return {
-            "fcff_table": formatted_output,
-            "assumptions": forecast_data["assumptions"],
-            "methodology": forecast_data["methodology"]
-        }
+                # Validate the projections data
+                required_metrics = [
+                    "revenues", "cost_of_goods_sold", "gross_profit", "operating_expenses",
+                    "ebitda", "depreciation_amortization", "ebit", "nopat", "capex",
+                    "change_in_net_working_capital", "fcff", "net_ppe", "gross_ppe"
+                ]
+                
+                for metric in required_metrics:
+                    if metric not in forecast_data["projections"]:
+                        return {"error": f"Missing required metric in projections: {metric}"}
+                    if not isinstance(forecast_data["projections"][metric], list):
+                        return {"error": f"Invalid data type for metric {metric}: expected list"}
+                    if len(forecast_data["projections"][metric]) != 5:
+                        return {"error": f"Invalid number of values for metric {metric}: expected 5"}
 
+                # Format the FCFF table in the requested structure
+                table_header = "| **Metric**                    | **Year 1**   | **Year 2**   | **Year 3**   | **Year 4**   | **Year 5**    |"
+                table_separator = "|------------------------------|--------------|--------------|--------------|--------------|---------------|"
+                
+                # Create the formatted table
+                formatted_table = [table_header, table_separator]
+                
+                # Define the metrics and their display names
+                metrics = [
+                    ("revenues", "Revenues"),
+                    ("cost_of_goods_sold", "Cost of Goods Sold"),
+                    ("gross_profit", "Gross Profit"),
+                    ("operating_expenses", "Operating Expenses"),
+                    ("ebitda", "EBITDA"),
+                    ("depreciation_amortization", "Depreciation & Amortization"),
+                    ("ebit", "EBIT"),
+                    ("nopat", "NOPAT"),
+                    ("capex", "CapEx"),
+                    ("change_in_net_working_capital", "Change in Net Working Capital"),
+                    ("fcff", "FCFF"),
+                    ("net_ppe", "Net PP&E"),
+                    ("gross_ppe", "Gross PP&E")
+                ]
+                
+                # Add each metric row
+                for metric_key, metric_name in metrics:
+                    values = forecast_data["projections"][metric_key]
+                    row = f"| {metric_name:<30} |"
+                    for value in values:
+                        row += f" {value:,.2f} |"
+                    formatted_table.append(row)
+
+                # Join the table lines with newlines
+                formatted_output = "\n".join(formatted_table)
+                messages.append({"role": "assistant", "content": formatted_output})
+                db.forecast_msgs.update_one({"pdf_id": pdfid}, {"$set": {"messages": messages}},upsert=True)
+                return {
+                    "fcff_table": formatted_output,
+                    "assumptions": forecast_data["assumptions"],
+                    "methodology": forecast_data["methodology"]
+                }
+
+            except Exception as e:
+                print(f"Error in FCFF projection: {str(e)}")
+                return {"error": f"Error generating financial forecast: {str(e)}"}
     except Exception as e:
         print(f"Error in FCFF projection: {str(e)}")
         return {"error": f"Error generating financial forecast: {str(e)}"}
+
 
 if __name__ == "__main__":
     import sys
