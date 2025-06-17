@@ -4,25 +4,23 @@ from core.pdf_utils import extract_text_from_pdf
 from core.llm import generate_questions_from_text
 from db.crud import save_user_qa, update_answer_and_get_next
 from models.question import UserQA, QAItem, AnswerRequest
-from pydantic import BaseModel
 import io
-import os
 from core.startup_valuation import perform_startup_valuation
 from core.generate_report_llm import generate_report
 from core.fetch_data_by_id import fetch_data_by_id
 from core.FCFFprojection import perform_fcff_projection
 from bson import ObjectId
 from db.crud import save_pdf_text
-<<<<<<< HEAD
+from pydantic import BaseModel
+from dotenv import load_dotenv
+import os
+from fastapi import FastAPI
+from pydantic import BaseModel
+import os
 from core.report_agent.agent import process_personas
 
-app = FastAPI()
+load_dotenv()
 
-class UserRequest(BaseModel):
-    user_id: str
-
-=======
-from pydantic import BaseModel
 
 class FCFFRequest(BaseModel):
     pdf_id: str
@@ -33,7 +31,9 @@ class ValuationRequest(BaseModel):
 
 app = FastAPI()
 
->>>>>>> 9b5a92ee8828217446aa9300393fea80c0a47623
+class UserRequest(BaseModel):
+    user_id: str
+
 @app.post("/api/v1/valuation")
 async def valuation(request: ValuationRequest):
     result = perform_startup_valuation(request.pdf_id)
