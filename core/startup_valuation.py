@@ -24,7 +24,7 @@ def get_pdf_text(pdfid: str) -> str:
         pdf_question= db.user_qas.find_one({"pdf_id": pdfid})
         if not pdf_doc:
             raise ValueError(f"No PDF found with ID: {pdfid}")
-        return pdf_doc,pdf_question
+        return pdf_doc.get('pdf_text'),pdf_question.get('user_qa').get('qas'),pdf_doc.get('forecast_results')
     except Exception as e:
         raise Exception(f"Error extracting PDF text: {str(e)}")
 
@@ -43,9 +43,9 @@ def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyDE1Ac0n_YGik7XUj
     # Extract PDF text from MongoDB
     try:
         print("pdfID",pdfid)
-        pdfText,user_Question = get_pdf_text(pdfid)
+        pdfText,user_Question,forecast_results = get_pdf_text(pdfid)
         print("user_Question",user_Question)
-        if not pdfText or not user_Question:
+        if not pdfText or not user_Question or not forecast_results:
             return {"error": "No text content found in the PDF"}
     except Exception as e:
         return {"error": f"Failed to extract PDF text: {str(e)}"}
@@ -523,7 +523,7 @@ def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyDE1Ac0n_YGik7XUj
 
     # Initialize conversation history
     conversation_history = [{"role": "system", "content": SYSTEM_MESSAGE}]
-    conversation_history.append({"role": "user", "content": f"""Text information:{pdfText} some related questions:{user_Question}"""})
+    conversation_history.append({"role": "user", "content": f"""Balance Sheet:{pdfText}\n\n some related questions and answers:{user_Question}\n\n Forecast Results:{forecast_results}"""})
 
     # Process the valuation
     MAX_TURNS = 20
@@ -604,6 +604,7 @@ def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyDE1Ac0n_YGik7XUj
             final_response = f"Error requesting final summary: {str(e)}"
 
     print(f"Final response: {final_response}")
+    db.pdf_texts.update_one({"_id": ObjectId(pdfid)}, {"$set": {"valuation_results": final_response}})
     return {
         "final_response": final_response,
         # "conversation_results": conversation_results,
