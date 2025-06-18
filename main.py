@@ -13,18 +13,18 @@ from bson import ObjectId
 from db.crud import save_pdf_text
 from pydantic import BaseModel
 
+app = FastAPI()
+
 class FCFFRequest(BaseModel):
     pdf_id: str
     userMSG: str
 
 class ValuationRequest(BaseModel):
     pdf_id: str
-
-app = FastAPI()
-
+    user_id: str
 @app.post("/api/v1/valuation")
 async def valuation(request: ValuationRequest):
-    result = perform_startup_valuation(request.pdf_id)
+    result = perform_startup_valuation(request.pdf_id,request.user_id)
     return {"result": result}
 
 @app.post("/api/v1/questions/generate")
