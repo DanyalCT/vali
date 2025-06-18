@@ -28,7 +28,7 @@ def get_pdf_text(pdfid: str) -> str:
     except Exception as e:
         raise Exception(f"Error extracting PDF text: {str(e)}")
 
-def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyDE1Ac0n_YGik7XUj-koaT22SS84DQsFF8", model_name: str = "gemini-2.0-flash"):
+def perform_startup_valuation(pdfid: str,user_id: str, api_key: str = "AIzaSyDE1Ac0n_YGik7XUj-koaT22SS84DQsFF8", model_name: str = "gemini-2.0-flash"):
     """
     Perform startup valuation based on PDF text extracted from MongoDB.
     
@@ -604,7 +604,7 @@ def perform_startup_valuation(pdfid: str, api_key: str = "AIzaSyDE1Ac0n_YGik7XUj
             final_response = f"Error requesting final summary: {str(e)}"
 
     print(f"Final response: {final_response}")
-    db.pdf_texts.update_one({"_id": ObjectId(pdfid)}, {"$set": {"valuation_results": final_response}})
+    db.valuation_results.update_one({"pdf_id": pdfid,"user_id":user_id}, {"$set": {"valuation_results": final_response}},upsert=True)
     return {
         "final_response": final_response,
         # "conversation_results": conversation_results,

@@ -12,15 +12,8 @@ from core.FCFFprojection import perform_fcff_projection
 from bson import ObjectId
 from db.crud import save_pdf_text
 from pydantic import BaseModel
-from dotenv import load_dotenv
-import os
-from fastapi import FastAPI
-from pydantic import BaseModel
-import os
-from core.report_agent.agent import process_personas
 
-load_dotenv()
-
+app = FastAPI()
 
 class FCFFRequest(BaseModel):
     pdf_id: str
@@ -28,15 +21,10 @@ class FCFFRequest(BaseModel):
 
 class ValuationRequest(BaseModel):
     pdf_id: str
-
-app = FastAPI()
-
-class UserRequest(BaseModel):
     user_id: str
-
 @app.post("/api/v1/valuation")
 async def valuation(request: ValuationRequest):
-    result = perform_startup_valuation(request.pdf_id)
+    result = perform_startup_valuation(request.pdf_id,request.user_id)
     return {"result": result}
 
 @app.post("/api/v1/questions/generate")
@@ -90,13 +78,6 @@ async def get_fcff_projection(request: FCFFRequest):
         return result
     except Exception as e:
         return {"error": f"Error processing FCFF projection: {str(e)}"}
-    
-@app.post("/report-agent")
-def report_agent_route(request: UserRequest):
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        return {"error": "GEMINI_API_KEY not set in environment."}
-    return process_personas(request.user_id, api_key)
 
 if __name__ == "__main__":
     import uvicorn
